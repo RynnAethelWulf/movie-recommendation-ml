@@ -8,16 +8,16 @@ import sqlite3
 from flask_restx import Api, Resource, reqparse, fields
 
 app = Flask(__name__)
-
+# Database
 engine = create_engine('sqlite:///resources/data.db')
-
+#API Documentation
 app = Flask(__name__)
 api = Api(app, prefix='/api',version='1.0', title='Movie Recommendation - API Documenation',
-    description='A simple API to retrieve machine learing info and data related to it',
+    description='A simple API Documentation to retrieve machine learing info and data related to it',
     doc='/docs',
     base_url='/api'
 ) 
-
+#Namespace
 ns = api.namespace('Movies GET API', description='Find Content Based Recommended Movies')
 
 @app.route('/home')
@@ -29,17 +29,9 @@ def index():
 def model():
     return render_template('ml.html')
 
-@app.route('/test')
-def test():
-    return render_template('test.html')
 
 
-@app.route('/data')
-def data():
-    connection = engine.connect()
-    df = pd.read_sql("SELECT * FROM info",connection)
-    records = df.to_json(orient='records')
-    return records
+
 
 model = api.model('Movie Name', 
 		  {'movie_name': fields.String(required = True, 
@@ -47,13 +39,13 @@ model = api.model('Movie Name',
 					 help="Movie name cannot be blank.")})
 
 
-@ns.route('/movies')
+@ns.route('/movie_titles')
 class data(Resource):
     def get(self):
         connection = engine.connect()
         df = pd.read_sql("SELECT * FROM info",connection)
-        records = df.title.to_json(orient='records')
-        return {'movies': records}
+        records = df.title.to_list()
+        return {"movie_titles":records}
 
 @ns.route('/machinelearning/<string:movie_name>')
 class Recommender(Resource):
@@ -92,44 +84,16 @@ class Recommender(Resource):
         # print(recommnedations[0:15])
         return {movie_name: recommnedations[1:15]}
 
-@app.route('/ml/<string:movie_name>')
-def ml(movie_name):
-    if not movie_name:
-        movie_name = "Child 44"
 
+
+
+@app.route('/data')
+def data():
     connection = engine.connect()
     df = pd.read_sql("SELECT * FROM info",connection)
-    features = ['keywords', 'cast', 'genres', 'director']
-
-    for feature in features:
-        df[feature] = df[feature].fillna('')
-    def combined_features(row):
-        return row['keywords']+" "+row['cast']+" "+row['genres']+" "+row['director']
-    df["combined_features"] = df.apply(combined_features, axis =1)
-    cv = CountVectorizer()
-    count_matrix = cv.fit_transform(df["combined_features"])
-    # print("Count Matrix:", count_matrix.toarray())
-    cosine_sim = cosine_similarity(count_matrix)
     records = df.to_json(orient='records')
-    movie_user_likes = str(movie_name)
+    return records
 
-    def get_index_from_title(title):
-        value = df.index[df['title'] == title].tolist()
-        return value[0]
-    movie_index = get_index_from_title(movie_user_likes)
-    similar_movies = list(enumerate(cosine_sim[movie_index]))
-# similar_movies
-    sorted_similar_movies = sorted(similar_movies, key=lambda x:x[1], reverse=True)
-# sorted_similar_movies
-    recommnedations =[]
-    def get_title_from_index(index):
-        recommnedations.append(df[df.index == index]["title"].values[0])
-
-    for movie in sorted_similar_movies:
-        get_title_from_index(movie[0])
-    # print(recommnedations[0:15])
-    
-    return jsonify(recommnedations[1:15])
 
 @app.route('/ml_1',methods=["POST","GET"])
 def ml_1():
