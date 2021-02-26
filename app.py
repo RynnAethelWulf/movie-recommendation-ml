@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import sqlite3
-from flask_restx import Api, Resource, reqparse
+from flask_restx import Api, Resource, reqparse, fields
 
 app = Flask(__name__)
 
@@ -18,8 +18,7 @@ api = Api(app, prefix='/api',version='1.0', title='Movie Recommendation - API Do
     base_url='/api'
 ) 
 
-
-
+ns = api.namespace('Movies GET API', description='Find Content Based Recommended Movies')
 
 @app.route('/home')
 @app.route('/')
@@ -42,17 +41,24 @@ def data():
     records = df.to_json(orient='records')
     return records
 
-parser = reqparse.RequestParser()
-parser.add_argument('movie_name', type=str, help='Pls input movie name')
-# parser.add_argument('var2', type=str, help='variable 2')
-recommnedations =[]
-@api.route('/machinelearning/<string:movie_name>')
-class HelloWorldParameter(Resource):
-    @api.doc(parser=parser)
-    def get(self,parser):
-        args = parser.parse_args()
-        movie_name = args['movie_name']
-        
+model = api.model('Movie Name', 
+		  {'movie_name': fields.String(required = True, 
+					 description="Name of the movie", 
+					 help="Movie name cannot be blank.")})
+
+
+@ns.route('/movies')
+class data(Resource):
+    def get(self):
+        connection = engine.connect()
+        df = pd.read_sql("SELECT * FROM info",connection)
+        records = df.title.to_json(orient='records')
+        return {'movies': records}
+
+@ns.route('/machinelearning/<string:movie_name>')
+class Recommender(Resource):
+    @api.doc(params={'movie_name': 'Enter the movie name'})
+    def get(self, movie_name):
         connection = engine.connect()
         df = pd.read_sql("SELECT * FROM info",connection)
         features = ['keywords', 'cast', 'genres', 'director']
@@ -77,23 +83,20 @@ class HelloWorldParameter(Resource):
     # similar_movies
         sorted_similar_movies = sorted(similar_movies, key=lambda x:x[1], reverse=True)
     # sorted_similar_movies
-        
+        recommnedations = []
         def get_title_from_index(index):
             recommnedations.append(df[df.index == index]["title"].values[0])
 
         for movie in sorted_similar_movies:
             get_title_from_index(movie[0])
         # print(recommnedations[0:15])
-        print(recommnedations)
-        return {movie_name: recommnedations}
+        return {movie_name: recommnedations[1:15]}
 
-
-@app.route('/ml/<movie_name>')
+@app.route('/ml/<string:movie_name>')
 def ml(movie_name):
     if not movie_name:
         movie_name = "Child 44"
 
-    
     connection = engine.connect()
     df = pd.read_sql("SELECT * FROM info",connection)
     features = ['keywords', 'cast', 'genres', 'director']
@@ -174,10 +177,6 @@ def livesearch():
     cursor.execute("""SELECT title FROM info WHERE title LIKE ?""", ('%'+searchbox+'%',))
     data = cursor.fetchall()
     return jsonify(data)
-
-
-
-
 
 if __name__ == '__main__':
     app.run(debug=True)
